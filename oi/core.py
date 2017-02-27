@@ -7,6 +7,11 @@ import logging
 from colorama import Fore
 from nanoservice import Service
 from nanoservice import Client
+try:
+    from nanoservice import nanomsg, nnpy
+except ImportError:
+    import nanomsg
+    nnpy = None
 
 from . import version
 from . import worker
@@ -153,7 +158,10 @@ class ClientWrapper(object):
 
         def make(addr):
             c = Client(addr)
-            c.socket._set_recv_timeout(timeout)
+            if nanomsg:
+                c.socket._set_recv_timeout(timeout)
+            else:
+                c.socket.setsockopt(nnpy.SOL_SOCKET, nnpy.RCVTIMEO, timeout)
             return c
 
         if ',' in addr:
