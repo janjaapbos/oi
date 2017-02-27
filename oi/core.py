@@ -5,8 +5,8 @@ import readline
 import logging
 
 from colorama import Fore
-from nanoservice import Service
-from nanoservice import Client
+from nanoservice import Responder
+from nanoservice import Requester
 try:
     from nanoservice import nanomsg, nnpy
 except ImportError:
@@ -92,13 +92,15 @@ class BaseProgram(object):
 class Program(BaseProgram):
     """ Long running program with a nanoservice endpoint.
 
-    `service` - nanoservice Service object
+    `service` - nanoservice Responder object
     `config` - the configuration parsed from --config <filepath> """
 
     def __init__(self, description, address):
         super(Program, self).__init__(description, address)
 
-        self.service = Service(address) if address else None
+        self.stop_event = threading.Event()
+        self.service = Responder(address) if address else None
+        self.service.stop_event = self.stop_event
         self.config = compat.configparser.ConfigParser()
 
         # Add the flag for parsing configuration file
@@ -116,6 +118,7 @@ class Program(BaseProgram):
         # Add default commands
         self.add_command('ping', lambda: 'pong')
         self.add_command('help', self.help_function)
+        self.add_command('stop', self.stop_function)
 
     def help_function(self, command=None):
         """ Show help for all available commands or just a single one """
@@ -124,6 +127,9 @@ class Program(BaseProgram):
                 'description', 'No help available'
             )
         return ', '.join(sorted(self.registered))
+
+    def stop_function(self):
+        self.stop_event.set()
 
     def add_command(self, command, function, description=None):
         """ Register a new function for command """
@@ -147,7 +153,7 @@ class Program(BaseProgram):
 
 
 class ClientWrapper(object):
-    """ An wrapper over nanoservice.Client to deal with one or multiple
+    """ An wrapper over nanoservice.Requester to deal with one or multiple
     clients in a similar fasion """
 
     def __init__(self, address, timeout):
@@ -157,7 +163,7 @@ class ClientWrapper(object):
         """ Create client(s) based on addr """
 
         def make(addr):
-            c = Client(addr)
+            c = Requester(addr)
             if nanomsg:
                 c.socket._set_recv_timeout(timeout)
             else:
