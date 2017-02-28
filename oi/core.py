@@ -98,9 +98,10 @@ class Program(BaseProgram):
     def __init__(self, description, address):
         super(Program, self).__init__(description, address)
 
-        self.stop_event = threading.Event()
+        self.continue_event = threading.Event()
+        self.continue_event.set()
         self.service = Responder(address) if address else None
-        self.service.stop_event = self.stop_event
+        self.service.continue_event = self.continue_event
         self.config = compat.configparser.ConfigParser()
 
         # Add the flag for parsing configuration file
@@ -129,7 +130,7 @@ class Program(BaseProgram):
         return ', '.join(sorted(self.registered))
 
     def stop_function(self):
-        self.stop_event.set()
+        self.continue_event.clear()
 
     def add_command(self, command, function, description=None):
         """ Register a new function for command """
