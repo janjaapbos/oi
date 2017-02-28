@@ -1,4 +1,5 @@
 import sys
+import os
 import argparse
 import threading
 import readline
@@ -103,6 +104,7 @@ class Program(BaseProgram):
         self.service = Responder(address) if address else None
         self.service.continue_event = self.continue_event
         self.config = compat.configparser.ConfigParser()
+        self.restart_requested = False
 
         # Add the flag for parsing configuration file
         self.parser.add_argument(
@@ -120,6 +122,7 @@ class Program(BaseProgram):
         self.add_command('ping', lambda: 'pong')
         self.add_command('help', self.help_function)
         self.add_command('stop', self.stop_function)
+        self.add_command('restart', self.restart_function)
 
     def help_function(self, command=None):
         """ Show help for all available commands or just a single one """
@@ -131,6 +134,13 @@ class Program(BaseProgram):
 
     def stop_function(self):
         self.continue_event.clear()
+
+    def restart_function(self):
+        self.restart_requested = True
+        self.stop_function()
+
+    def restart(self):
+        os.execv(sys.argv[0], sys.argv)
 
     def add_command(self, command, function, description=None):
         """ Register a new function for command """
@@ -151,6 +161,9 @@ class Program(BaseProgram):
         # Start workers then wait until they finish work
         [w.start() for w in self.workers]
         [w.join() for w in self.workers]
+
+        if self.restart_requested:
+            self.restart()
 
 
 class ClientWrapper(object):
