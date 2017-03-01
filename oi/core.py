@@ -187,6 +187,7 @@ class ClientWrapper(object):
                 c.socket._set_recv_timeout(timeout)
             else:
                 c.socket.setsockopt(nnpy.SOL_SOCKET, nnpy.RCVTIMEO, timeout)
+                c.socket.setsockopt(nnpy.SOL_SOCKET, nnpy.IPV4ONLY, 0)
             return c
 
         if ',' in addr:
