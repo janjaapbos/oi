@@ -290,7 +290,8 @@ class CtlProgram(BaseProgram):
 
     def __init__(self, description, address, timeout=3000):
         super(CtlProgram, self).__init__(description, address)
-        self.client = ClientWrapper(self.address, timeout)
+        if self.address:
+            self.client = ClientWrapper(self.address, timeout)
 
         # Add default commands
         self.add_command('quit', lambda p: sys.exit(0), 'quit ctl')
