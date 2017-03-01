@@ -101,7 +101,17 @@ class Program(BaseProgram):
     `service` - nanoservice Responder object
     `config` - the configuration parsed from --config <filepath> """
 
-    def __init__(self, description, address):
+    def __init__(self, description=None, address=None):
+        args = self.parser.parse_args()
+        # Read configuration file if any
+        if args.config is not None:
+            filepath = args.config
+            self.config.read(filepath)
+        if address is None:
+            address = self.config.get('address')
+        if description is None:
+            description = self.config.get('description')
+
         super(Program, self).__init__(description, address)
 
         self.continue_event = threading.Event()
@@ -157,11 +167,6 @@ class Program(BaseProgram):
 
         args = args or self.parser.parse_args()
         super(Program, self).run(args)
-
-        # Read configuration file if any
-        if args.config is not None:
-            filepath = args.config
-            self.config.read(filepath)
 
         # Start workers then wait until they finish work
         [w.start() for w in self.workers]
