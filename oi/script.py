@@ -13,7 +13,7 @@ from . import core
 README = """
 myprogram
 =========
-my program and its ctl
+myprogram and its ctl
 """
 
 Makefile = """
@@ -46,7 +46,6 @@ distribute:
 
 
 setup = """
-
 #!/usr/bin/env python
 
 try:
@@ -93,6 +92,7 @@ setup(
         'console_scripts': [
             'myprogramd = myprogram.myprogramd:main',
             'myprogramctl = myprogram.myprogramctl:main',
+            'myprogramsvc = myprogram.myprogramsvc:main',
         ],
     },
 
@@ -101,13 +101,17 @@ setup(
 
 myprogramd = """
 import oi
+from scheduler import setup_scheduler, scheduler
+import logging
 
 
 def main():
-    program = oi.Program('my program', 'ipc:///tmp/oi-random_string.sock')
+    program = oi.Program('myprogram', 'ipc:///tmp/oi-random_string.sock')
     program.add_command('ping', lambda: 'pong')
     program.add_command('state', lambda: program.state)
+    setup_scheduler(program)
     program.run()
+    scheduler.shutdown()
 
 if __name__ == '__main__':
     main()
@@ -125,6 +129,163 @@ if __name__ == '__main__':
     main()
 """
 
+myprogramsvc = """
+import oi
+import sys
+import logging
+from logging.handlers import SysLogHandler
+import time
+from scheduler import setup_scheduler, scheduler
+import service
+
+ctr_url = 'ipc:///tmp/oi-random_string.sock'
+
+
+def stop_function():
+    ctl = oi.CtlProgram('ctl program', ctr_url)
+    ctl.call('stop')
+    ctl.client.close()
+
+class Service(service.Service):
+    def __init__(self, *args, **kwargs):
+        super(Service, self).__init__(*args, **kwargs)
+        self.syslog_handler = SysLogHandler(
+            address=service.find_syslog(),
+            facility=SysLogHandler.LOG_DAEMON
+        )
+        formatter = logging.Formatter(
+            '%(name)s - %(levelname)s - %(message)s')
+        self.syslog_handler.setFormatter(formatter)
+        #self.logger.addHandler(self.syslog_handler)
+        #self.logger.setLevel(logging.INFO)
+        logging.addHandler(self.syslog_handler)
+
+    def run(self):
+        while not self.got_sigterm():
+            #self.logger.info("Starting")
+            logging.info("Starting")
+            self.program = oi.Program('myprogram', ctr_url)
+            self.program.logger = self.logger
+            self.program.add_command('ping', lambda: 'pong')
+            self.program.add_command('state', lambda: self.program.state)
+            setup_scheduler(self.program)
+            self.program.run()
+            scheduler.shutdown()
+            #self.logger.info("Stopping")
+            logging.info("Stopping")
+        self.program.stop_function()
+
+def main():
+    import sys
+
+    if len(sys.argv) < 2:
+        sys.exit('Syntax: %s COMMAND' % sys.argv[0])
+
+    cmd = sys.argv[1]
+    sys.argv.remove(cmd)
+
+    service = Service('myprogram', pid_dir='/tmp')
+
+    if cmd == 'start':
+        service.start()
+    elif cmd == 'stop':
+        service.stop()
+        stop_function()
+    elif cmd == 'restart':
+        service.stop()
+        stop_function()
+        while service.is_running():
+            time.sleep(0.1)
+        service.start()
+    elif cmd == 'status':
+        if service.is_running():
+            print "Service is running."
+        else:
+            print "Service is not running."
+    else:
+        sys.exit('Unknown command "%s".' % cmd)
+
+
+if __name__ == '__main__':
+    main()
+"""
+
+scheduler = """
+from pytz import utc
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor, ProcessPoolExecutor
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
+import logging
+
+# Needed for pyinstaller
+from apscheduler.triggers.interval import IntervalTrigger  # NOQA
+
+jobstores = {
+    'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
+}
+executors = {
+    'default': ThreadPoolExecutor(20),
+    'processpool': ProcessPoolExecutor(5)
+}
+job_defaults = {
+    'coalesce': False,
+    'max_instances': 3
+}
+scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=utc)
+
+def test_func():
+    pass
+
+def test(program):
+    job_id = '2b40852613b348b5b595ab07fe875837'
+    job = scheduler.get_job(job_id)
+    #program.logger.info('Job 1 ' + str(job))
+    logging.info('Job 1 ' + str(job))
+    if not job:
+        job = scheduler.add_job(test_func, IntervalTrigger(seconds=10), id=job_id, replace_existing=True)
+        #program.logger.info('Job 2 ' + str(job))
+        logging.info('Job 2 ' + str(job))
+    return job
+
+def test(program):
+    job = scheduler.add_job(test_func, IntervalTrigger(seconds=10))
+    return job
+
+def get_jobs():
+    return '\\n'.join([job.id for job in scheduler.get_jobs()])
+
+def get_job(jobid):
+    return str(scheduler.get_job(jobid))
+
+def remove_job(jobid):
+    return str(scheduler.remove_job(jobid))
+
+def dir_scheduler():
+    return dir(scheduler)
+
+def setup_scheduler(program):
+    def my_listener(event):
+        if event.exception:
+            print('The job crashed :(')
+        else:
+            print('The job worked :)')
+
+    scheduler.add_listener(
+        my_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
+    )
+    program.add_command('get_jobs', get_jobs)
+    program.add_command('get_job', get_job)
+    program.add_command('remove_job', remove_job)
+    scheduler.start()
+    #program.logger.info('Started scheduler')
+    logging.info('Started scheduler')
+    test(program)
+    #program.logger.info('Scheduled test job')
+    logging.info('Scheduled test job')
+
+
+"""
 
 # =========================================================
 # GENERATE SKELETON LOGIC
@@ -160,7 +321,9 @@ def init_new_project(program):
     # Add py files
     files = [
         ('myprogramd.py', myprogramd),
-        ('myprogramctl.py', myprogramctl)]
+        ('myprogramsvc.py', myprogramsvc),
+        ('myprogramctl.py', myprogramctl),
+        ('scheduler.py', scheduler)]
 
     random_string = ''.join(random.sample([chr(i) for i in range(97, 123)], 10))
 

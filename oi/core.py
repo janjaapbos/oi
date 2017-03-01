@@ -43,13 +43,17 @@ class State(dict):
 class BaseProgram(object):
     """ Subclass this """
 
-    def __init__(self, description, address=None, state=None, workers=None):
+    def __init__(self, description, address=None, state=None, workers=None,
+                 args=None
+        ):
         self.description = description
         self.address = address
         self.parser = self.new_parser()
         self.state = state or State()
         self.workers = workers or []
         self.registered = {}  # registered commands
+
+        logging.basicConfig(level=logging.ERROR)
 
     def new_parser(self):
         """ Create a command line argument parser
@@ -83,7 +87,7 @@ class BaseProgram(object):
         args = args or self.parser.parse_args()
 
         if args.debug:
-            logging.basicConfig(level=logging.DEBUG)
+            logging.getLogger().setLevel(logging.DEBUG)
 
         if args.version:
             print(version.VERSION)
