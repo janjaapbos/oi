@@ -46,22 +46,23 @@ class BaseProgram(object):
     def __init__(self, description, address=None, state=None, workers=None,
                  args=None
         ):
+        logging.basicConfig(level=logging.ERROR)
         self.description = description
         self.parser = self.new_parser()
         args, unknown = self.parser.parse_known_args()
-        self.config = compat.configparser.ConfigParser()
+        self.config = compat.configparser.ConfigParser({
+            'address': address,
+        })
         # Read configuration file if any
         if args.config is not None:
             filepath = args.config
             self.config.read(filepath)
-        address = self.config.get('address', address)
+            address = self.config.get('default', 'address')
 
         self.address = address
         self.state = state or State()
         self.workers = workers or []
         self.registered = {}  # registered commands
-
-        logging.basicConfig(level=logging.ERROR)
 
     def new_parser(self):
         """ Create a command line argument parser
@@ -117,7 +118,7 @@ class Program(BaseProgram):
 
         self.continue_event = threading.Event()
         self.continue_event.set()
-        self.service = Responder(address) if address else None
+        self.service = Responder(self.address)
         self.service.continue_event = self.continue_event
         self.restart_requested = False
 
@@ -289,15 +290,18 @@ class CtlProgram(BaseProgram):
 
     def __init__(self, description, address, timeout=3000):
         super(CtlProgram, self).__init__(description, address)
-        self.client = ClientWrapper(address, timeout) if address else None
-
-        # Add command argument
-        self.parser.add_argument(
-            'command', help='command name to execute', nargs='*',
-            metavar='command')
+        self.client = ClientWrapper(self.address, timeout)
 
         # Add default commands
         self.add_command('quit', lambda p: sys.exit(0), 'quit ctl')
+
+    def new_parser(self):
+        parser = super(CtlProgram, self).new_parser()
+        # Add command argument
+        parser.add_argument(
+            'command', help='command name to execute', nargs='*',
+            metavar='command')
+        return parser
 
     def call(self, command, *args):
         """ Execute local OR remote command and show response """
