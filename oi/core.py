@@ -47,8 +47,16 @@ class BaseProgram(object):
                  args=None
         ):
         self.description = description
-        self.address = address
         self.parser = self.new_parser()
+        args, unknown = self.parser.parse_known_args()
+        self.config = compat.configparser.ConfigParser()
+        # Read configuration file if any
+        if args.config is not None:
+            filepath = args.config
+            self.config.read(filepath)
+        address = self.config.get('address', address)
+
+        self.address = address
         self.state = state or State()
         self.workers = workers or []
         self.registered = {}  # registered commands
@@ -68,6 +76,9 @@ class BaseProgram(object):
         parser.add_argument(
             '--debug', help='enable debugging',
             default=False, action='store_true')
+        # Add the flag for parsing configuration file
+        parser.add_argument(
+            '--config', help='configuration file to use', nargs='?')
         return parser
 
     def add_command(self, command, function, description=None):
@@ -101,29 +112,14 @@ class Program(BaseProgram):
     `service` - nanoservice Responder object
     `config` - the configuration parsed from --config <filepath> """
 
-    def __init__(self, description=None, address=None):
-        args = self.parser.parse_args()
-        # Read configuration file if any
-        if args.config is not None:
-            filepath = args.config
-            self.config.read(filepath)
-        if address is None:
-            address = self.config.get('address')
-        if description is None:
-            description = self.config.get('description')
-
+    def __init__(self, description, address):
         super(Program, self).__init__(description, address)
 
         self.continue_event = threading.Event()
         self.continue_event.set()
         self.service = Responder(address) if address else None
         self.service.continue_event = self.continue_event
-        self.config = compat.configparser.ConfigParser()
         self.restart_requested = False
-
-        # Add the flag for parsing configuration file
-        self.parser.add_argument(
-            '--config', help='configuration file to use', nargs='?')
 
         if self.service is None:
             return
