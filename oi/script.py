@@ -158,7 +158,7 @@ class Service(service.Service):
         self.syslog_handler.setFormatter(formatter)
         #self.logger.addHandler(self.syslog_handler)
         #self.logger.setLevel(logging.INFO)
-        logging.addHandler(self.syslog_handler)
+        logging.getLogger().addHandler(self.syslog_handler)
 
     def run(self):
         while not self.got_sigterm():
