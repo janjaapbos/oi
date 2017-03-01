@@ -86,6 +86,7 @@ class BaseProgram(object):
 
         args = args or self.parser.parse_args()
 
+        logging.info('run args: ' + str(args))
         if args.debug:
             logging.getLogger().setLevel(logging.DEBUG)
 

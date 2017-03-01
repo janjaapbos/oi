@@ -103,10 +103,11 @@ myprogramd = """
 import oi
 from scheduler import setup_scheduler, scheduler
 import logging
+from .config import ctl_url
 
 
 def main():
-    program = oi.Program('myprogram', 'ipc:///tmp/oi-random_string.sock')
+    program = oi.Program('myprogram', ctl_url)
     program.add_command('ping', lambda: 'pong')
     program.add_command('state', lambda: program.state)
     setup_scheduler(program)
@@ -119,10 +120,11 @@ if __name__ == '__main__':
 
 myprogramctl = """
 import oi
+from .config import ctl_url
 
 
 def main():
-    ctl = oi.CtlProgram('ctl program', 'ipc:///tmp/oi-random_string.sock')
+    ctl = oi.CtlProgram('ctl program', ctl_url)
     ctl.run()
 
 if __name__ == '__main__':
@@ -135,14 +137,12 @@ import sys
 import logging
 from logging.handlers import SysLogHandler
 import time
-from scheduler import setup_scheduler, scheduler
 import service
-
-ctr_url = 'ipc:///tmp/oi-random_string.sock'
+from .config import ctl_url
 
 
 def stop_function():
-    ctl = oi.CtlProgram('ctl program', ctr_url)
+    ctl = oi.CtlProgram('ctl program', ctl_url)
     ctl.call('stop')
     ctl.client.close()
 
@@ -156,15 +156,13 @@ class Service(service.Service):
         formatter = logging.Formatter(
             '%(name)s - %(levelname)s - %(message)s')
         self.syslog_handler.setFormatter(formatter)
-        #self.logger.addHandler(self.syslog_handler)
-        #self.logger.setLevel(logging.INFO)
         logging.getLogger().addHandler(self.syslog_handler)
 
     def run(self):
+        from scheduler import setup_scheduler, scheduler
         while not self.got_sigterm():
-            #self.logger.info("Starting")
             logging.info("Starting")
-            self.program = oi.Program('myprogram', ctr_url)
+            self.program = oi.Program('myprogram', ctl_url)
             self.program.logger = self.logger
             self.program.add_command('ping', lambda: 'pong')
             self.program.add_command('state', lambda: self.program.state)
@@ -208,6 +206,10 @@ def main():
 
 if __name__ == '__main__':
     main()
+"""
+
+config = """
+ctl_url = 'ipc:///tmp/oi-random_string.sock'
 """
 
 scheduler = """
@@ -323,6 +325,7 @@ def init_new_project(program):
         ('myprogramd.py', myprogramd),
         ('myprogramsvc.py', myprogramsvc),
         ('myprogramctl.py', myprogramctl),
+        ('config.py', config),
         ('scheduler.py', scheduler)]
 
     random_string = ''.join(random.sample([chr(i) for i in range(97, 123)], 10))
