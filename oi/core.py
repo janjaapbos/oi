@@ -46,7 +46,7 @@ class BaseProgram(object):
     def __init__(self, description, address=None, state=None, workers=None,
                  args=None
         ):
-        logging.basicConfig(level=logging.ERROR)
+        logging.basicConfig(level=logging.WARNING)
         self.description = description
         self.parser = self.new_parser()
         args, unknown = self.parser.parse_known_args()

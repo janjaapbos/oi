@@ -90,6 +90,7 @@ setup(
 
     entry_points={
         'console_scripts': [
+            'myprogram = myprogram.myprogram:main',
             'myprogramd = myprogram.myprogramd:main',
             'myprogramctl = myprogram.myprogramctl:main',
             'myprogramsvc = myprogram.myprogramsvc:main',
@@ -99,50 +100,105 @@ setup(
 )
 """
 
+freeze = """
+#!/bin/sh
+
+rm -rf build dist
+pyinstaller --hidden-import cffi myprogram/myprogram.py
+
+cp myprogram/config.py dist/myprogram/config.py
+cp myprogram/scheduler.py dist/myprogram/scheduler.py
+
+cd dist/myprogram
+ln -s myprogram myprogramd
+ln -s myprogram myprogramsvc
+ln -s myprogram myprogramctl
+cd ../../
+"""
+
 myprogramd = """
 import oi
-from scheduler import setup_scheduler, scheduler
-import logging
-from .config import ctl_url
+try:
+    import config
+except ImportError:
+    import myprogram.config as config
 
 
 def main():
-    program = oi.Program('myprogram', ctl_url)
+    program = oi.Program('myprogram', config.ctl_url)
     program.add_command('ping', lambda: 'pong')
     program.add_command('state', lambda: program.state)
+    try:
+        from scheduler import setup_scheduler, scheduler
+    except ImportError: 
+        from myprogram.scheduler import setup_scheduler, scheduler
     setup_scheduler(program)
+    if hasattr(config, 'register_hook'):
+        config.register_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals(),
+                program=program
+            )
+        )
     program.run()
     scheduler.shutdown()
 
+
 if __name__ == '__main__':
-    main()
+    if hasattr(config, 'main_hook'):
+        if not config.main_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals()
+            )
+        ):
+            main()
+    else:
+        main()
 """
 
 myprogramctl = """
 import oi
-from .config import ctl_url
+try:
+    import config
+except ImportError:
+    import myprogram.config as config
 
 
 def main():
-    ctl = oi.CtlProgram('ctl program', ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url)
     ctl.run()
 
 if __name__ == '__main__':
-    main()
+    if hasattr(config, 'main_hook'):
+        if not config.main_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals()
+            )
+        ):
+            main()
+    else:
+        main()
 """
 
 myprogramsvc = """
 import oi
+import os
 import sys
 import logging
 from logging.handlers import SysLogHandler
 import time
 import service
-from .config import ctl_url
+try:
+    import config
+except ImportError:
+    import myprogram.config as config
 
 
 def stop_function():
-    ctl = oi.CtlProgram('ctl program', ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url)
     ctl.call('stop')
     ctl.client.close()
 
@@ -159,18 +215,39 @@ class Service(service.Service):
         logging.getLogger().addHandler(self.syslog_handler)
 
     def run(self):
-        from scheduler import setup_scheduler, scheduler
+        try:
+            from scheduler import setup_scheduler, scheduler
+        except ImportError: 
+            from myprogram.scheduler import setup_scheduler, scheduler
         while not self.got_sigterm():
             logging.info("Starting")
-            self.program = oi.Program('myprogram', ctl_url)
+            self.program = oi.Program('myprogram', config.ctl_url)
             self.program.logger = self.logger
             self.program.add_command('ping', lambda: 'pong')
             self.program.add_command('state', lambda: self.program.state)
+            def restart():
+                logging.warning('Restarting')
+                self.program.continue_event.set()
+            self.program.restart = restart
             setup_scheduler(self.program)
+            if hasattr(config, 'register_hook'):
+                config.register_hook(
+                    ctx=dict(
+                        locals=locals(),
+                        globals=globals(),
+                        program=program
+                    )
+                )
             self.program.run()
+            logging.warning("Stopping")
             scheduler.shutdown()
-            logging.info("Stopping")
-        self.program.stop_function()
+            if not self.program.continue_event.wait(0.1):
+                break
+            self.stop()
+            os.unlink('/tmp/demo.pid')
+            os.execl(sys.executable, sys.argv[0], 'start')
+        if self.got_sigterm():
+            self.program.stop_function()
 
 def main():
     import sys
@@ -204,12 +281,186 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if hasattr(config, 'main_hook'):
+        if not config.main_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals()
+            )
+        ):
+            main()
+    else:
+        main()
 """
 
-config = """
-ctl_url = 'ipc:///tmp/oi-random_string.sock'
+myprogram = """
+import oi
+import os
+import sys
+import logging
+from logging.handlers import SysLogHandler
+import time
+import service
+try:
+    import config
+except ImportError:
+    import myprogram.config as config
+
+
+def stop_function():
+    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl.call('stop')
+    ctl.client.close()
+
+class Service(service.Service):
+    def __init__(self, *args, **kwargs):
+        super(Service, self).__init__(*args, **kwargs)
+        self.syslog_handler = SysLogHandler(
+            address=service.find_syslog(),
+            facility=SysLogHandler.LOG_DAEMON
+        )
+        formatter = logging.Formatter(
+            '%(name)s - %(levelname)s - %(message)s')
+        self.syslog_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(self.syslog_handler)
+
+    def run(self):
+        try:
+            from scheduler import setup_scheduler, scheduler
+        except ImportError: 
+            from myprogram.scheduler import setup_scheduler, scheduler
+        while not self.got_sigterm():
+            logging.info("Starting")
+            self.program = oi.Program('myprogram', config.ctl_url)
+            self.program.logger = self.logger
+            self.program.add_command('ping', lambda: 'pong')
+            self.program.add_command('state', lambda: self.program.state)
+            def restart():
+                logging.warning('Restarting')
+                self.program.continue_event.set()
+            self.program.restart = restart
+            setup_scheduler(self.program)
+            if hasattr(config, 'register_hook'):
+                config.register_hook(
+                    ctx=dict(
+                        locals=locals(),
+                        globals=globals(),
+                        program=program
+                    )
+                )
+            self.program.run()
+            logging.warning("Stopping")
+            scheduler.shutdown()
+            if not self.program.continue_event.wait(0.1):
+                break
+            self.stop()
+            os.unlink('/tmp/demo.pid')
+            os.execl(sys.executable, sys.argv[0], 'start')
+        if self.got_sigterm():
+            self.program.stop_function()
+
+def main_ctl():
+    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl.run()
+
+def main_d():
+    program = oi.Program('myprogram', config.ctl_url)
+    program.add_command('ping', lambda: 'pong')
+    program.add_command('state', lambda: program.state)
+    try:
+        from scheduler import setup_scheduler, scheduler
+    except ImportError: 
+        from myprogram.scheduler import setup_scheduler, scheduler
+    setup_scheduler(program)
+    if hasattr(config, 'register_hook'):
+        config.register_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals(),
+                program=program
+            )
+        )
+    program.run()
+    scheduler.shutdown()
+
+def main_svc():
+    import sys
+
+    if len(sys.argv) < 2:
+        sys.exit('Syntax: %s COMMAND' % sys.argv[0])
+
+    cmd = sys.argv[1]
+    sys.argv.remove(cmd)
+
+    service = Service('myprogram', pid_dir='/tmp')
+
+    if cmd == 'start':
+        service.start()
+    elif cmd == 'stop':
+        service.stop()
+        stop_function()
+    elif cmd == 'restart':
+        service.stop()
+        stop_function()
+        while service.is_running():
+            time.sleep(0.1)
+        service.start()
+    elif cmd == 'status':
+        if service.is_running():
+            print "Service is running."
+        else:
+            print "Service is not running."
+    else:
+        sys.exit('Unknown command "%s".' % cmd)
+
+def main():
+    prog_name = sys.argv[0].lower()
+    if prog_name.endswith('.exe'):
+        prog_name = prog_name[:-4]
+    if prog_name.endswith('svc'):
+        main_svc()
+    elif prog_name.endswith('d'):
+        main_d()
+    else:
+        main_ctl()
+
+if __name__ == '__main__':
+    if hasattr(config, 'main_hook'):
+        if not config.main_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals()
+            )
+        ):
+            main()
+    else:
+        main()
 """
+
+config = '''
+"""
+If this config file is placed in the same directory as the
+frozen binary, is will be loaded instead of the frozen config.
+"""
+
+ctl_url = 'ipc:///tmp/oi-random_string.sock'
+
+
+def main_hook(ctx=None):
+    """
+    Custom hook to be executed. A return value other than None
+    will stop further execution.
+    """
+    ctx['locals']['logging'].info('config.main_hook')
+
+def register_hook(ctx=None):
+    """
+    Custom hook to extend and register commands with the program.
+    ctx is a dict with locals, globals and program object
+    """
+    ctx['locals']['logging'].info('config.register_hook')
+    ctx['program'].add_command('hello', lambda: 'world')
+'''
 
 scheduler = """
 from pytz import utc
@@ -245,9 +496,9 @@ def test(program):
         job = scheduler.add_job(test_func, IntervalTrigger(seconds=10), id=job_id, replace_existing=True)
     return job
 
-def test(program):
-    job = scheduler.add_job(test_func, IntervalTrigger(seconds=10))
-    return job
+#def test(program):
+#    job = scheduler.add_job(test_func, IntervalTrigger(seconds=10))
+#    return job
 
 def get_jobs():
     return '\\n'.join([job.id for job in scheduler.get_jobs()])
@@ -258,15 +509,12 @@ def get_job(jobid):
 def remove_job(jobid):
     return str(scheduler.remove_job(jobid))
 
-def dir_scheduler():
-    return dir(scheduler)
-
 def setup_scheduler(program):
     def my_listener(event):
         if event.exception:
-            print('The job crashed :(')
+            logging.error('Job crashed: ' + str(event))
         else:
-            print('The job worked :)')
+            logging.info('Job executed: ' + str(event))
 
     scheduler.add_listener(
         my_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR
@@ -276,8 +524,8 @@ def setup_scheduler(program):
     program.add_command('remove_job', remove_job)
     scheduler.start()
     logging.info('Started scheduler')
-    test(program)
-    logging.info('Scheduled test job')
+    #test(program)
+    #logging.info('Scheduled test job')
 
 
 """
@@ -313,8 +561,14 @@ def init_new_project(program):
         data = re.sub(r'    @', r'\t@', data)
         fh.write(data)
 
+    # Add freeze script
+    with open('freeze.sh', 'w') as fh:
+        fh.write(freeze.replace('myprogram', name).lstrip())
+    os.chmod('freeze.sh', 0o775)
+
     # Add py files
     files = [
+        ('myprogram.py', myprogram),
         ('myprogramd.py', myprogramd),
         ('myprogramsvc.py', myprogramsvc),
         ('myprogramctl.py', myprogramctl),
