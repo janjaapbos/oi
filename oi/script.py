@@ -451,14 +451,14 @@ def main_hook(ctx=None):
     Custom hook to be executed. A return value other than None
     will stop further execution.
     """
-    ctx['locals']['logging'].info('config.main_hook')
+    ctx['globals']['logging'].info('config.main_hook')
 
 def register_hook(ctx=None):
     """
     Custom hook to extend and register commands with the program.
     ctx is a dict with locals, globals and program object
     """
-    ctx['locals']['logging'].info('config.register_hook')
+    ctx['globals']['logging'].info('config.register_hook')
     ctx['program'].add_command('hello', lambda: 'world')
 '''
 
