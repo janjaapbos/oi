@@ -235,7 +235,7 @@ class Service(service.Service):
                     ctx=dict(
                         locals=locals(),
                         globals=globals(),
-                        program=program
+                        program=self.program
                     )
                 )
             self.program.run()
@@ -345,7 +345,7 @@ class Service(service.Service):
                     ctx=dict(
                         locals=locals(),
                         globals=globals(),
-                        program=program
+                        program=self.program
                     )
                 )
             self.program.run()
