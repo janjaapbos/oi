@@ -125,7 +125,7 @@ except ImportError:
 
 
 def main():
-    program = oi.Program('myprogram', config.ctl_url)
+    program = oi.Program('myprogram', config.ctl_url_bind)
     program.add_command('ping', lambda: 'pong')
     program.add_command('state', lambda: program.state)
     try:
@@ -167,7 +167,7 @@ except ImportError:
 
 
 def main():
-    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
     ctl.run()
 
 if __name__ == '__main__':
@@ -198,7 +198,7 @@ except ImportError:
 
 
 def stop_function():
-    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
     ctl.call('stop')
     ctl.client.close()
 
@@ -221,7 +221,7 @@ class Service(service.Service):
             from myprogram.scheduler import setup_scheduler, scheduler
         while not self.got_sigterm():
             logging.info("Starting")
-            self.program = oi.Program('myprogram', config.ctl_url)
+            self.program = oi.Program('myprogram', config.ctl_url_bind)
             self.program.logger = self.logger
             self.program.add_command('ping', lambda: 'pong')
             self.program.add_command('state', lambda: self.program.state)
@@ -308,7 +308,7 @@ except ImportError:
 
 
 def stop_function():
-    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
     ctl.call('stop')
     ctl.client.close()
 
@@ -331,7 +331,7 @@ class Service(service.Service):
             from myprogram.scheduler import setup_scheduler, scheduler
         while not self.got_sigterm():
             logging.info("Starting")
-            self.program = oi.Program('myprogram', config.ctl_url)
+            self.program = oi.Program('myprogram', config.ctl_url_bind)
             self.program.logger = self.logger
             self.program.add_command('ping', lambda: 'pong')
             self.program.add_command('state', lambda: self.program.state)
@@ -360,11 +360,11 @@ class Service(service.Service):
             self.program.stop_function()
 
 def main_ctl():
-    ctl = oi.CtlProgram('ctl program', config.ctl_url)
+    ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
     ctl.run()
 
 def main_d():
-    program = oi.Program('myprogram', config.ctl_url)
+    program = oi.Program('myprogram', config.ctl_url_bind)
     program.add_command('ping', lambda: 'pong')
     program.add_command('state', lambda: program.state)
     try:
@@ -443,7 +443,8 @@ If this config file is placed in the same directory as the
 frozen binary, is will be loaded instead of the frozen config.
 """
 
-ctl_url = 'ipc:///tmp/oi-random_string.sock'
+ctl_url_bind = 'ipc:///tmp/oi-random_string.sock'
+ctl_url_connect = 'ipc:///tmp/oi-random_string.sock'
 
 import logging
 
