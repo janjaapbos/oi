@@ -445,6 +445,8 @@ frozen binary, is will be loaded instead of the frozen config.
 
 ctl_url_bind = 'ipc:///tmp/oi-random_string.sock'
 ctl_url_connect = 'ipc:///tmp/oi-random_string.sock'
+# ctl_url_bind = 'ws://*:5558'
+# ctl_url_connect = 'ws://localhost:5558'
 
 import logging
 
