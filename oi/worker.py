@@ -33,11 +33,14 @@ class QueueWorker(Worker):
         super(QueueWorker, self).__init__(**kwargs)
 
     def run(self):
-        while self.program.continue_event.wait():
+        while self.program.continue_event.wait(1):
             try:
                 ctx = self.sessions.queue.get(block=True)
             except Queue.Empty:
                 continue
+            if ctx == 'stop':
+                self.sessions.queue.task_done()
+                break
             self.handle(ctx)
             self.sessions[ctx.session.session_uuid].queue.put(ctx)
             self.sessions.queue.task_done()

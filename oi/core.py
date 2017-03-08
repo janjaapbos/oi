@@ -501,6 +501,7 @@ class Program(BaseProgram):
         self.continue_event.set()
         self.service = Responder(self.address)
         self.service.continue_event = self.continue_event
+        self.service.stop_cleanup = self.stop_cleanup
         self.restart_requested = False
 
         if self.service is None:
@@ -553,8 +554,12 @@ class Program(BaseProgram):
         self.add_command('file_put', self.file_operation.file_put),
         self.create_worker_pool()
 
+    def stop_cleanup(self):
+        for w in self.workers:
+            self.cli_sessions.queue.put('stop')
+
     def create_worker_pool(self):
-        for i in range(5):
+        for i in range(10):
             self.workers.append(worker.QueueWorker(program=self, sessions=self.cli_sessions))
 
     def queue_hello_function(self, ctx, who):
@@ -613,7 +618,7 @@ class Program(BaseProgram):
         # Start workers then wait until they finish work
         [w.start() for w in self.workers]
 
-        while self.continue_event.wait():
+        while self.continue_event.wait(1):
            [w.join() for w in self.workers]
 
         if self.restart_requested:
