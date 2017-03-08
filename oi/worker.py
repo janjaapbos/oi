@@ -1,4 +1,7 @@
 import threading
+import Queue
+import time
+import oi
 
 
 class Worker(threading.Thread):
@@ -21,3 +24,28 @@ class ServiceWorker(Worker):
 
     def run(self):
         self.service.start()
+
+
+class QueueWorker(Worker):
+
+    def __init__(self, sessions=None, **kwargs):
+        self.sessions = sessions
+        super(QueueWorker, self).__init__(**kwargs)
+
+    def run(self):
+        while self.program.continue_event.wait(0.1):
+            try:
+                ctx = self.sessions.queue.get(block=True, timeout=2)
+            except Queue.Empty:
+                continue
+            self.handle(ctx)
+            self.sessions[ctx.session.session_uuid].queue.put(ctx)
+            self.sessions.queue.task_done()
+
+    def handle(self, ctx):
+        try:
+            ctx.result = ctx.func(*ctx.get('args', []), **ctx.get('kwargs', {}))
+        except Exception as exception:
+            logging.error(
+                'Request {} exception {}'.format(ref, exception), exc_info=1)
+            ctx.error = str(exception)

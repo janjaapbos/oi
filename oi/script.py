@@ -126,8 +126,7 @@ except ImportError:
 
 def main():
     program = oi.Program('myprogram', config.ctl_url_bind)
-    program.add_command('ping', lambda: 'pong')
-    program.add_command('state', lambda: program.state)
+    program.add_command('ping', lambda _: 'pong')
     try:
         from scheduler import setup_scheduler, scheduler
     except ImportError: 
@@ -223,8 +222,7 @@ class Service(service.Service):
             logging.info("Starting")
             self.program = oi.Program('myprogram', config.ctl_url_bind)
             self.program.logger = self.logger
-            self.program.add_command('ping', lambda: 'pong')
-            self.program.add_command('state', lambda: self.program.state)
+            self.program.add_command('ping', lambda _: 'pong')
             def restart():
                 logging.warning('Restarting')
                 self.program.continue_event.set()
@@ -333,8 +331,7 @@ class Service(service.Service):
             logging.info("Starting")
             self.program = oi.Program('myprogram', config.ctl_url_bind)
             self.program.logger = self.logger
-            self.program.add_command('ping', lambda: 'pong')
-            self.program.add_command('state', lambda: self.program.state)
+            self.program.add_command('ping', lambda _: 'pong')
             def restart():
                 logging.warning('Restarting')
                 self.program.continue_event.set()
@@ -365,8 +362,7 @@ def main_ctl():
 
 def main_d():
     program = oi.Program('myprogram', config.ctl_url_bind)
-    program.add_command('ping', lambda: 'pong')
-    program.add_command('state', lambda: program.state)
+    program.add_command('ping', lambda _: 'pong')
     try:
         from scheduler import setup_scheduler, scheduler
     except ImportError: 
@@ -464,7 +460,7 @@ def register_hook(ctx=None):
     ctx is a dict with locals, globals and program object
     """
     # logging.debug('config.register_hook')
-    ctx['program'].add_command('hello', lambda: 'world')
+    ctx['program'].add_command('hello', lambda _: 'world')
 '''
 
 scheduler = """
