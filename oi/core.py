@@ -371,9 +371,12 @@ class FileOperation(object):
 
     def file_put(self, ctx, path, blob, offset=0):
         offset = int(offset)
+        mode = 'ab'
+        if offset == 0:
+            mode = 'wb'
         self.assert_valid_authorisation(ctx)
         self.assert_valid_path(path, inside=True)
-        with open(path, 'wb') as fp:
+        with open(path, mode) as fp:
             fp.seek(int(offset))
             fp.write(blob)
         return
