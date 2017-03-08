@@ -343,9 +343,9 @@ class FileOperation(object):
         self.assert_valid_authorisation(ctx)
         self.assert_valid_path(path)
         ctx.content_type = 'application/octet-stream'
-        fp = open(path, 'rb')
-        fp.seek(int(offset))
-        content = fp.read(int(count))
+        with open(path, 'rb') as fp:
+            fp.seek(int(offset))
+            content = fp.read(int(count))
         total_size = os.path.getsize(path)
         done = offset + count
         remaining = total_size - done
@@ -362,7 +362,6 @@ class FileOperation(object):
             content=content,
             content_type=ctx.content_type
         )
-        fp.close()
         return result
 
     def file_get_size(self, ctx, path):
@@ -374,10 +373,9 @@ class FileOperation(object):
         offset = int(offset)
         self.assert_valid_authorisation(ctx)
         self.assert_valid_path(path, inside=True)
-        fp = open(path, 'wb')
-        fp.seek(int(offset))
-        fp.write(blob)
-        fp.close()
+        with open(path, 'wb') as fp:
+            fp.seek(int(offset))
+            fp.write(blob)
         return
 
 
@@ -717,8 +715,11 @@ class Response(object):
             mode = 'ab'
         else:
             fname = ''
-        res = self.rep.get('result')
-        err = self.rep.get('error')
+        if not self.rep:
+            res = err = None
+        else:
+            res = self.rep.get('result')
+            err = self.rep.get('error')
         if res and fname:
             with open(fname, mode) as fpout:
                 try:
@@ -857,39 +858,39 @@ class CtlProgram(BaseProgram):
         pass
 
     def cli_file_get(self, prog, src_path, dst_path, offset=0, count=1000000):
-        fpout = open(dst_path, 'wb')
-        while True:
-            for response in self.call('file_get', src_path, offset, count):
-                rep = response.rep
-                res = rep.get('result')
-                err = rep.get('error')
-                if err:
-                    return response
-                assert res['path'] == src_path
-                fpout.write(res['content'])
-            if res['next_offset'] > 0:
-                logging.debug(
-                    'remaining bytes:', res['total_size'] - res['next_offset'])
-                logging.debug('next offset:', res['next_offset'])
-                offset = res['next_offset']
-            else:
-                break
+        with open(dst_path, 'wb') as fpout:
+            while True:
+                for response in self.call('file_get', src_path, offset, count):
+                    rep = response.rep
+                    res = rep.get('result')
+                    err = rep.get('error')
+                    if err:
+                        return response
+                    assert res['path'] == src_path
+                    fpout.write(res['content'])
+                if res['next_offset'] > 0:
+                    logging.debug(
+                        'remaining bytes:', res['total_size'] - res['next_offset'])
+                    logging.debug('next offset:', res['next_offset'])
+                    offset = res['next_offset']
+                else:
+                    break
         return dict(result='saved file: {}'.format(dst_path))
 
     def cli_file_put(self, prog, src_path, dst_path):
         offset = 0
         count = 1000000
-        fpin = open(src_path, 'rb')
-        while True:
-            blob = fpin.read(count)
-            if not blob:
-                break
-            response = self.call('file_put', dst_path, blob, offset)[0]
-            res = response.rep.get('result')
-            err = response.rep.get('error')
-            if err:
-                return response.rep
-            offset += count
+        with open(src_path, 'rb') as fpin:
+            while True:
+                blob = fpin.read(count)
+                if not blob:
+                    break
+                response = self.call('file_put', dst_path, blob, offset)[0]
+                res = response.rep.get('result')
+                err = response.rep.get('error')
+                if err:
+                    return response.rep
+                offset += count
         return dict(result='copied file: {}'.format(dst_path))
 
     def run(self, args=None, loop=True):

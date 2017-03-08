@@ -117,16 +117,21 @@ cd ../../
 """
 
 myprogramd = """
+#!/usr/bin/env python
+
 import oi
 try:
     import config
 except ImportError:
     import myprogram.config as config
+import threading
+import signal
 
 
 def main():
     program = oi.Program('myprogram', config.ctl_url_bind)
     program.add_command('ping', lambda _: 'pong')
+    signal.signal(signal.SIGINT, program.service.stop)
     try:
         from scheduler import setup_scheduler, scheduler
     except ImportError: 
@@ -158,6 +163,8 @@ if __name__ == '__main__':
 """
 
 myprogramctl = """
+#!/usr/bin/env python
+
 import oi
 try:
     import config
@@ -183,6 +190,8 @@ if __name__ == '__main__':
 """
 
 myprogramsvc = """
+#!/usr/bin/env python
+
 import oi
 import os
 import sys
