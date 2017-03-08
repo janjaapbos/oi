@@ -127,9 +127,11 @@ class Sessions(State):
         self.login_validate(username, password)
         token = self.session_add(None, session_uuid)
         session = self[session_uuid]
-        self._tag_set(session, 'domain', 'client')
         if username == self.program.username:
             self._cap_set(session, 'system.file', '/')
+            self._tag_set(session, 'domain', 'system')
+        else:
+            self._tag_set(session, 'domain', 'client')
         return token
 
     def logout(self, ctx):
