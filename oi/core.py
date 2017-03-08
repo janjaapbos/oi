@@ -552,7 +552,7 @@ class Program(BaseProgram):
         self.create_worker_pool()
 
     def create_worker_pool(self):
-        for i in range(30):
+        for i in range(5):
             self.workers.append(worker.QueueWorker(program=self, sessions=self.cli_sessions))
 
     def queue_hello_function(self, ctx, who):
@@ -611,8 +611,8 @@ class Program(BaseProgram):
         # Start workers then wait until they finish work
         [w.start() for w in self.workers]
 
-        while self.continue_event.wait(1):
-           [w.join(1) for w in self.workers]
+        while self.continue_event.wait():
+           [w.join() for w in self.workers]
 
         if self.restart_requested:
             self.restart()

@@ -33,9 +33,9 @@ class QueueWorker(Worker):
         super(QueueWorker, self).__init__(**kwargs)
 
     def run(self):
-        while self.program.continue_event.wait(0.1):
+        while self.program.continue_event.wait():
             try:
-                ctx = self.sessions.queue.get(block=True, timeout=2)
+                ctx = self.sessions.queue.get(block=True)
             except Queue.Empty:
                 continue
             self.handle(ctx)
