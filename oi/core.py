@@ -193,13 +193,12 @@ class Sessions(object):
     def session_get(self, ctx, session_uuid=None, auth_token=None):
         if not ctx.session and not session_uuid:
             raise ValueError("No session provided")
-        if ctx.session:
-            ctx.session.timestamp = time.time()
         if session_uuid and auth_token:
             assert_valid_uuid(session_uuid)
             if not session_uuid in self.sessions:
                 raise AuthenticateError('Invalid credentials')
             self.sessions[session_uuid].auth_token_valid(auth_token)
+            self.sessions[session_uuid].timestamp = time.time()
             return self.sessions[session_uuid]
         return ctx.session
 
