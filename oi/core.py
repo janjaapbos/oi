@@ -599,7 +599,7 @@ class Program(BaseProgram):
         if ctx.session.tags['domain'] != 'system':
             raise AuthorisationError('tag domain:system required')
         self.restart_requested = True
-        self.stop_function()
+        self.stop_function(ctx)
 
     def restart(self):
         os.execv(sys.argv[0], sys.argv)
