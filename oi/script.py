@@ -487,8 +487,8 @@ jobstores = {
     'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
 }
 executors = {
-    'default': ThreadPoolExecutor(20),
-    'processpool': ProcessPoolExecutor(5)
+    'default': ThreadPoolExecutor(10),
+    # 'processpool': ProcessPoolExecutor(5)
 }
 job_defaults = {
     'coalesce': False,
@@ -503,7 +503,7 @@ def test(program):
     job_id = '2b40852613b348b5b595ab07fe875837'
     job = scheduler.get_job(job_id)
     if not job:
-        job = scheduler.add_job(test_func, IntervalTrigger(seconds=10), id=job_id, replace_existing=True)
+        job = scheduler.add_job(test_func, IntervalTrigger(seconds=60), id=job_id, replace_existing=True)
     return job
 
 #def test(program):
