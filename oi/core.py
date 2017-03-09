@@ -95,15 +95,39 @@ class Session(State):
             raise ValueError('Invalid token')
 
 
-class Sessions(State):
+class Sessions(object):
     """ Sessions dict """
 
-    def __init__(self, program):
-        super(Sessions, self).__init__()
+    def __init__(self, program, purge_interval=5, expire=15):
+        self.purge_interval = purge_interval
+        self.expire = expire
         self.program = program
+        self.sessions = State()
         self.tags = State()
         self.caps = State()
         self.queue = Queue.Queue()
+        self.purge_sessions()
+
+    def purge_sessions(self):
+        if not self.program.continue_event.wait(1):
+            return
+        threading.Timer(self.purge_interval, self.purge_sessions).start()
+        keys = self.sessions.keys()
+        for session_uuid in keys[:]:
+            if session_uuid == self.program.session_uuid:
+                continue
+            session = self.sessions.get(session_uuid)
+            if not session:
+                continue
+            try:
+                if time.time() - session.timestamp > self.expire:
+                    logging.debug('Purging session {} with timestamp {}'.format(
+                        session_uuid, session.timestamp))
+                    self._session_del(session)
+            except Exception as exception:
+                logging.error(
+                    'Purge {} exception {}'.format(session, exception), exc_info=1)
+                error = str(exception)
 
     """ Not to be exposed directly, only to be used in functions """
     def _cmd(self, cmd, ctx, *args):
@@ -126,7 +150,7 @@ class Sessions(State):
     def login(self, ctx, session_uuid, username, password):
         self.login_validate(username, password)
         token = self.session_add(None, session_uuid)
-        session = self[session_uuid]
+        session = self.sessions[session_uuid]
         if username == self.program.username:
             self._cap_set(session, 'system.file', '/')
             self._tag_set(session, 'domain', 'system')
@@ -141,13 +165,21 @@ class Sessions(State):
         if not isinstance(session_uuid, basestring) and not session_uuid:
             raise ValueError('Session uuid must be a uuidV4 string')
         assert_valid_uuid(session_uuid)
-        if session_uuid in self:
+        if session_uuid in self.sessions:
             raise ValueError('Session exists: ' + session_uuid)
-        self[session_uuid] = Session(session_uuid)
-        return self[session_uuid].auth_token_add(
+        self.sessions[session_uuid] = Session(session_uuid)
+        return self.sessions[session_uuid].auth_token_add(
             'Created at new session',
             auth_token
         )
+
+    def _session_del(self, session):
+        session['deleted'] = True
+        for name in session.tags.keys()[:]:
+            self._tag_del(session, name)
+        for name in session.caps.keys()[:]:
+            self._cap_del(session, name)
+        del self.sessions[session['session_uuid']]
 
     def session_del(self, ctx, session_uuid=None, auth_token=None):
         if not ctx.session and not session_uuid:
@@ -156,22 +188,19 @@ class Sessions(State):
             delete_session = self.session_get(ctx, session_uuid, auth_token)
         else:
             delete_session = ctx.session
-        delete_session['deleted'] = True
-        for name in session.tags:
-            self._tag_del(delete_session, name)
-        for name in session.caps:
-            self._cap_del(delete_session, name)
-        del self[delete_session['session_uuid']]
+        self._session_del(delete_session)
 
     def session_get(self, ctx, session_uuid=None, auth_token=None):
         if not ctx.session and not session_uuid:
             raise ValueError("No session provided")
+        if ctx.session:
+            ctx.session.timestamp = time.time()
         if session_uuid and auth_token:
             assert_valid_uuid(session_uuid)
-            if not session_uuid in self:
+            if not session_uuid in self.sessions:
                 raise AuthenticateError('Invalid credentials')
-            self[session_uuid].auth_token_valid(auth_token)
-            return self[session_uuid]
+            self.sessions[session_uuid].auth_token_valid(auth_token)
+            return self.sessions[session_uuid]
         return ctx.session
 
     def auth_token_add(self, *args):
@@ -193,7 +222,7 @@ class Sessions(State):
 
     def tag_set(self, ctx, session_uuid, tag_name, tag_value):
         assert_valid_uuid(session_uuid)
-        tag_session = self[session_uuid]
+        tag_session = self.sessions[session_uuid]
         self.tag_set_validate(ctx, tag_session, tag_name, tag_value)
         if tag_name not in self.tags:
             self.tags[tag_name] = State()
@@ -208,7 +237,7 @@ class Sessions(State):
 
     def tag_del(self, ctx, session_uuid, tag_name):
         assert_valid_uuid(session_uuid)
-        tag_session = self[session_uuid]
+        tag_session = self.sessions[session_uuid]
         self.tag_set_validate(ctx, tag_session, tag_name)
         try:
             del ctx.session.tags[tag_name]
@@ -248,7 +277,7 @@ class Sessions(State):
 
     def cap_set(self, ctx, session_uuid, cap_name, cap_value):
         assert_valid_uuid(session_uuid)
-        cap_session = self[session_uuid]
+        cap_session = self.sessions[session_uuid]
         self.cap_set_validate(ctx, cap_session, cap_name, cap_value)
         if cap_name not in self.caps:
             self.caps[cap_name] = State()
@@ -263,7 +292,7 @@ class Sessions(State):
 
     def cap_del(self, ctx, session_uuid, cap_name):
         assert_valid_uuid(session_uuid)
-        cap_session = self[session_uuid]
+        cap_session = self.sessions[session_uuid]
         self.cap_set_validate(ctx, cap_session, cap_name)
         try:
             del cap_session.caps[cap_name]
@@ -513,7 +542,7 @@ class Program(BaseProgram):
         if not self.auth_token:
             self.auth_token = str(uuid.uuid4())
         self.cli_sessions.session_add(None, self.session_uuid, self.auth_token)
-        self.session = self.cli_sessions[self.session_uuid]
+        self.session = self.cli_sessions.sessions[self.session_uuid]
         self.cli_sessions._tag_set(self.session, 'domain', 'system')
 
         # Add default service worker, which will respond to ctl commands
