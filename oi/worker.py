@@ -42,7 +42,7 @@ class QueueWorker(Worker):
                 self.sessions.queue.task_done()
                 break
             self.handle(ctx)
-            self.sessions[ctx.session.session_uuid].queue.put(ctx)
+            self.sessions.sessions[ctx.session.session_uuid].queue.put(ctx)
             self.sessions.queue.task_done()
 
     def handle(self, ctx):
