@@ -174,6 +174,14 @@ except ImportError:
 
 def main():
     ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
+    if hasattr(config, 'register_hook'):
+        config.register_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals(),
+                program=ctl
+            )
+        )
     ctl.run()
 
 if __name__ == '__main__':
@@ -367,6 +375,14 @@ class Service(service.Service):
 
 def main_ctl():
     ctl = oi.CtlProgram('ctl program', config.ctl_url_connect)
+    if hasattr(config, 'register_hook'):
+        config.register_hook(
+            ctx=dict(
+                locals=locals(),
+                globals=globals(),
+                program=ctl
+            )
+        )
     ctl.run()
 
 def main_d():
