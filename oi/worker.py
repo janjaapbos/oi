@@ -2,6 +2,7 @@ import threading
 import Queue
 import time
 import oi
+import logging
 
 
 class Worker(threading.Thread):
@@ -50,5 +51,5 @@ class QueueWorker(Worker):
             ctx.result = ctx.func(*ctx.get('args', []), **ctx.get('kwargs', {}))
         except Exception as exception:
             logging.error(
-                'Request {} exception {}'.format(ref, exception), exc_info=1)
+                'Request {} exception {}'.format(str(ctx), exception), exc_info=1)
             ctx.error = str(exception)
